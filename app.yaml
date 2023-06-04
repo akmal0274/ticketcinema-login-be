@@ -1,0 +1,7 @@
+runtime: nodejs16 # or another supported version
+service: be-vehicletaxes-login
+
+env_variables:
+  BUCKET_NAME: "be-vehicletaxes-bucket"
+  SECRET_KEY: "vehicletaxes"
+  DATABASE_URL: "mysql://root@34.30.89.208:3306/vehicletaxes?schema=public"
