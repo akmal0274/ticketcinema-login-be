@@ -9,7 +9,7 @@ const app = express();
 app.use(express.json());
 
 // Secret key for JWT
-const secretKey = 'your_secret_key';
+const secretKey = process.env.SECRET_KEY;;
 
 // Register route
 app.post('/register', async (req, res) => {
