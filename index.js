@@ -1,85 +1,105 @@
 const express = require('express');
-const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 const app = express();
 
-app.use(bodyParser.json());
+app.use(express.json());
 
-// JWT secret key
-const secretKey = process.env.SECRET_KEY;
-
-// Middleware for authenticating JWT token
-function authenticateToken(req, res, next) {
-  const token = req.headers.authorization?.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'No token provided' });
-  }
-
-  jwt.verify(token, secretKey, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Token verification failed' });
-    }
-
-    req.user = user;
-    next();
-  });
-}
-
-
-
-// Login route
-app.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-
-  // Check if the user exists in the database
-  const user = await prisma.user.findUnique({ where: { email } });
-
-  if (!user) {
-    return res.status(401).json({ error: 'Invalid email or password' });
-  }
-
-  // Check if the password is correct
-  if (password !== user.password) {
-    return res.status(401).json({ error: 'Invalid email or password' });
-  }
-
-  // Generate JWT token
-  const token = jwt.sign({ email: user.email }, secretKey);
-
-  // Send the token in the response
-  res.json({ token });
-});
+// Secret key for JWT
+const secretKey = 'your_secret_key';
 
 // Register route
 app.post('/register', async (req, res) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-  // Check if the user already exists in the database
-  const existingUser = await prisma.user.findUnique({ where: { email } });
+    // Check if the user already exists
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
 
-  if (existingUser) {
-    return res.status(400).json({ error: 'User already exists' });
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create the user in the database
+    const newUser = await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword
+      }
+    });
+
+    // Generate a JWT token
+    const token = jwt.sign({ userId: newUser.id }, secretKey, { expiresIn: '1h' });
+
+    // Send the token as a response
+    res.json({ token });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal server error' });
   }
+});
 
-  // Create a new user
-  const newUser = await prisma.user.create({
-    data: { email, password },
-  });
+app.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
 
-  // Generate JWT token
-  const token = jwt.sign({ email: newUser.email }, secretKey);
+    // Find the user in the database
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
-  // Send the token in the response
-  res.json({ token });
+    // Compare the provided password with the stored hash
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Invalid password' });
+    }
+
+    // Generate a JWT token
+    const token = jwt.sign({ userId: user.id }, secretKey, { expiresIn: '1h' });
+
+    // Send the token as a response
+    res.json({ token });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // Protected route
-app.get('/protected', authenticateToken, (req, res) => {
-  res.json({ message: 'Protected route accessed successfully!' });
+app.get('/protected', (req, res) => {
+  const token = req.headers.authorization;
+
+  // Verify the token
+  jwt.verify(token, secretKey, (err, decoded) => {
+    if (err) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    // Get the user ID from the decoded token
+    const userId = decoded.userId;
+
+    // Fetch user details from the database using the user ID
+    prisma.user
+      .findUnique({ where: { id: userId } })
+      .then(user => {
+        if (!user) {
+          return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Send protected data as a response
+        res.json({ message: 'Protected data', user });
+      })
+      .catch(error => {
+        console.error(error);
+        res.status(500).json({ error: 'Internal server error' });
+      });
+  });
 });
 
 // Start the server
