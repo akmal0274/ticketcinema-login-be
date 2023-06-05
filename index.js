@@ -37,7 +37,7 @@ app.post('/register', async (req, res) => {
     const token = jwt.sign({ userId: newUser.id }, secretKey, { expiresIn: '1h' });
 
     // Send the token as a response
-    res.json({ token });
+    res.json({ newUser, token });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Internal server error' });
