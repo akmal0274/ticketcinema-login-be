@@ -1,5 +1,5 @@
 runtime: nodejs16 # or another supported version
-service: be-vehicletaxes-login
+service: be-cinematicket-login
 
 env_variables:
   BUCKET_NAME: "be-vehicletaxes-bucket"
